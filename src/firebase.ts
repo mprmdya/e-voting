@@ -14,7 +14,16 @@ import {
   orderBy,
   serverTimestamp,
 } from 'firebase/firestore'
-import { getAuth, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider, type User } from 'firebase/auth'
+import {
+  getAuth,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  signOut,
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  type User,
+} from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "demo-api-key",
@@ -52,6 +61,8 @@ export {
   orderBy,
   serverTimestamp,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged,
 }

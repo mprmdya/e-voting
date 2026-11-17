@@ -5,6 +5,8 @@ import {
   voteCollection,
   settingsDocRef,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged,
   addDoc,
@@ -17,6 +19,14 @@ import {
   serverTimestamp,
   type User,
 } from './firebase'
+
+// Detect iOS / iPadOS Safari — popup is blocked by OS, must use redirect
+const isIOSSafari = (): boolean => {
+  const ua = navigator.userAgent
+  const isIOS = /iP(ad|hone|od)/.test(ua)
+  const isIPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
+  return isIOS || isIPadOS
+}
 import { PASLON_LIST, type Candidate } from './data/paslonData'
 import type { TabType, ToastMessage } from './types'
 import { Navbar } from './components/Navbar'
@@ -62,6 +72,43 @@ export default function App() {
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
+
+  // Handle redirect result on mount (for iOS Safari — after Google redirect back)
+  useEffect(() => {
+    getRedirectResult(authInstance)
+      .then((result) => {
+        if (!result) return
+        const loggedUser = result.user
+        const email = (loggedUser.email || '').toLowerCase().trim()
+        const domainCheck = campusDomain.toLowerCase().trim()
+
+        if (domainCheck && !email.endsWith(domainCheck)) {
+          signOut(authInstance)
+          setUser(null)
+          addToast(
+            'error',
+            `Akses Ditolak: Hanya email kampus (${campusDomain}) yang diizinkan. Akun ${email} ditolak.`
+          )
+          return
+        }
+
+        setUser(loggedUser)
+        const userVoteKey = `voted_${loggedUser.uid}`
+        const isAlreadyVoted = localStorage.getItem(userVoteKey)
+        if (isAlreadyVoted && JSON.parse(isAlreadyVoted)) setHasVoted(true)
+        const choiceKey = `choice_${loggedUser.uid}`
+        const storedChoice = localStorage.getItem(choiceKey)
+        if (storedChoice) setChosenPaslonId(storedChoice)
+        addToast('success', `Berhasil masuk sebagai ${loggedUser.displayName || 'Mahasiswa'}`)
+      })
+      .catch((err) => {
+        // Ignore cancelled redirect (user pressed back)
+        if ((err as { code?: string })?.code !== 'auth/cancelled-popup-request') {
+          console.error('getRedirectResult error:', err)
+        }
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Run once on mount
 
   // Check auth state
   useEffect(() => {
@@ -151,10 +198,17 @@ export default function App() {
     return () => unsub()
   }, [])
 
-  // Google Login
+  // Google Login — pakai redirect untuk iOS Safari, popup untuk browser lain
   const handleGoogleLogin = async () => {
     setIsLoggingIn(true)
     try {
+      if (isIOSSafari()) {
+        // iOS Safari memblokir popup — gunakan redirect
+        await signInWithRedirect(authInstance, googleProvider)
+        // Halaman akan redirect ke Google; kode setelah ini tidak dijalankan
+        return
+      }
+
       const result = await signInWithPopup(authInstance, googleProvider)
       const loggedUser = result.user
       const email = (loggedUser.email || '').toLowerCase().trim()
