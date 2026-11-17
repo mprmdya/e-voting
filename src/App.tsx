@@ -20,12 +20,18 @@ import {
   type User,
 } from './firebase'
 
-// Detect iOS / iPadOS Safari — popup is blocked by OS, must use redirect
-const isIOSSafari = (): boolean => {
-  const ua = navigator.userAgent
-  const isIOS = /iP(ad|hone|od)/.test(ua)
-  const isIPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
-  return isIOS || isIPadOS
+// Detect In-App Browser (WhatsApp, Instagram, FB, Line, TikTok)
+const isInAppBrowser = (): boolean => {
+  if (typeof navigator === 'undefined') return false
+  const ua = (navigator.userAgent || '').toLowerCase()
+  return (
+    ua.includes('whatsapp') ||
+    ua.includes('fban') ||
+    ua.includes('fbav') ||
+    ua.includes('instagram') ||
+    ua.includes('line') ||
+    ua.includes('micromessenger')
+  )
 }
 import { PASLON_LIST, type Candidate } from './data/paslonData'
 import type { TabType, ToastMessage } from './types'
@@ -73,7 +79,7 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  // Handle redirect result on mount (for iOS Safari — after Google redirect back)
+  // Handle redirect result on mount (if user was redirected from Google)
   useEffect(() => {
     getRedirectResult(authInstance)
       .then((result) => {
@@ -101,24 +107,38 @@ export default function App() {
         if (storedChoice) setChosenPaslonId(storedChoice)
         addToast('success', `Berhasil masuk sebagai ${loggedUser.displayName || 'Mahasiswa'}`)
       })
-      .catch((err) => {
-        // Ignore cancelled redirect (user pressed back)
-        if ((err as { code?: string })?.code !== 'auth/cancelled-popup-request') {
-          console.error('getRedirectResult error:', err)
+      .catch((err: unknown) => {
+        const error = err as { code?: string; message?: string }
+        if (
+          error?.code === 'auth/cancelled-popup-request' ||
+          error?.code === 'auth/popup-closed-by-user'
+        ) {
+          return
         }
+        if (error?.code === 'auth/unauthorized-domain') {
+          addToast(
+            'error',
+            'Domain Vercel belum diizinkan di Firebase Console (Authentication > Settings > Authorized domains).'
+          )
+          return
+        }
+        console.error('getRedirectResult error:', err)
       })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Run once on mount
+  }, [campusDomain, addToast])
 
   // Check auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
       if (currentUser && currentUser.email) {
         const email = currentUser.email.toLowerCase().trim()
-        const domainCheck = campusDomain.toLowerCase()
+        const domainCheck = campusDomain.toLowerCase().trim()
         if (domainCheck && !email.endsWith(domainCheck)) {
           signOut(authInstance)
           setUser(null)
+          addToast(
+            'error',
+            `Akses Ditolak: Email ${email} bukan email kampus (${campusDomain}).`
+          )
           return
         }
       }
@@ -146,7 +166,7 @@ export default function App() {
       }
     })
     return () => unsubscribe()
-  }, [campusDomain])
+  }, [campusDomain, addToast])
 
   // Listen to Candidates & Election Settings from Firestore in Real-Time
   useEffect(() => {
@@ -198,17 +218,17 @@ export default function App() {
     return () => unsub()
   }, [])
 
-  // Google Login — pakai redirect untuk iOS Safari, popup untuk browser lain
+  // Google Login — popup default, fallback to redirect if popup is blocked
   const handleGoogleLogin = async () => {
+    if (isInAppBrowser()) {
+      addToast(
+        'warning',
+        'Google memblokir login langsung dari WhatsApp. Silakan buka website ini di browser Safari/Chrome eksternal.'
+      )
+    }
+
     setIsLoggingIn(true)
     try {
-      if (isIOSSafari()) {
-        // iOS Safari memblokir popup — gunakan redirect
-        await signInWithRedirect(authInstance, googleProvider)
-        // Halaman akan redirect ke Google; kode setelah ini tidak dijalankan
-        return
-      }
-
       const result = await signInWithPopup(authInstance, googleProvider)
       const loggedUser = result.user
       const email = (loggedUser.email || '').toLowerCase().trim()
@@ -234,9 +254,33 @@ export default function App() {
       }
 
       addToast('success', `Berhasil masuk sebagai ${loggedUser.displayName || 'Mahasiswa'}`)
-    } catch (error) {
-      console.error('Google login error:', error)
-      addToast('error', 'Gagal login dengan akun Google.')
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string }
+      console.error('Google login error:', err)
+
+      if (err?.code === 'auth/popup-blocked') {
+        // Jika popup diblokir oleh browser iOS/Safari, alihkan ke redirect
+        addToast('info', 'Popup diblokir, mengalihkan ke halaman Google...')
+        await signInWithRedirect(authInstance, googleProvider)
+        return
+      }
+
+      if (err?.code === 'auth/unauthorized-domain') {
+        addToast(
+          'error',
+          'Domain Vercel belum diizinkan di Firebase Console (Authentication > Settings > Authorized domains).'
+        )
+        return
+      }
+
+      if (
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request'
+      ) {
+        return
+      }
+
+      addToast('error', `Gagal login: ${err?.message || 'Silakan coba lagi.'}`)
     } finally {
       setIsLoggingIn(false)
     }
@@ -501,6 +545,22 @@ export default function App() {
               </div>
             </div>
           </div>
+
+          {/* WhatsApp / In-App Browser Notice */}
+          {isInAppBrowser() && !user && (
+            <div className="max-w-xl mx-auto p-4 rounded-xl bg-amber-950/90 backdrop-blur-md border border-amber-500/50 text-amber-100 text-xs shadow-xl space-y-2">
+              <div className="flex items-center gap-2 font-bold text-amber-300 text-sm">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Penting: Buka di Browser Safari / Chrome</span>
+              </div>
+              <p className="text-amber-200/90 leading-relaxed">
+                Anda membuka link ini di dalam browser bawaan WhatsApp/Medsos. Demi keamanan, Google <strong>memblokir login (Error 400)</strong> di browser bawaan WhatsApp.
+              </p>
+              <div className="bg-amber-900/60 p-2.5 rounded-lg border border-amber-500/30 font-medium text-white flex items-center justify-between gap-2">
+                <span>Ketuk ikon <strong>titik tiga (⋯)</strong> di pojok layar, lalu pilih <strong>&quot;Buka di Browser&quot;</strong> (Safari/Chrome)</span>
+              </div>
+            </div>
+          )}
 
           {/* Voting Closed Banner */}
           {!isVotingOpen && (
