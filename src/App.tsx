@@ -310,16 +310,26 @@ export default function App() {
   }
 
   const handleSaveCampusDomain = async (newDomain: string) => {
-    const formatted = newDomain.startsWith('@') ? newDomain : `@${newDomain}`
-    await setDoc(settingsDocRef, { campusDomain: formatted }, { merge: true })
-    setCampusDomain(formatted)
-    addToast('success', `Filter domain kampus diatur ke: ${formatted}`)
+    try {
+      const formatted = newDomain.startsWith('@') ? newDomain : `@${newDomain}`
+      await setDoc(settingsDocRef, { campusDomain: formatted }, { merge: true })
+      setCampusDomain(formatted)
+      addToast('success', `Filter domain kampus diatur ke: ${formatted}`)
+    } catch (err) {
+      console.error('Save campus domain error:', err)
+      addToast('error', 'Gagal menyimpan domain kampus. Periksa aturan Firestore.')
+    }
   }
 
   const handleSaveCampusBg = async (newBg: string) => {
-    await setDoc(settingsDocRef, { campusBg: newBg }, { merge: true })
-    setCampusBg(newBg)
-    addToast('success', 'Foto background kampus TSU berhasil diperbarui!')
+    try {
+      await setDoc(settingsDocRef, { campusBg: newBg }, { merge: true })
+      setCampusBg(newBg)
+      addToast('success', 'Foto background kampus TSU berhasil diperbarui!')
+    } catch (err) {
+      console.error('Save campus bg error:', err)
+      addToast('error', 'Gagal menyimpan background kampus. Periksa aturan Firestore.')
+    }
   }
 
   // Logout
@@ -456,18 +466,28 @@ export default function App() {
   }
 
   const handleSaveCandidates = async (updated: Candidate[]) => {
-    await setDoc(settingsDocRef, { candidates: updated }, { merge: true })
-    setCandidates(updated)
-    addToast('success', 'Data paslon berhasil diperbarui ke Cloud Firestore!')
+    try {
+      await setDoc(settingsDocRef, { candidates: updated }, { merge: true })
+      setCandidates(updated)
+      addToast('success', 'Data paslon berhasil diperbarui ke Cloud Firestore!')
+    } catch (err) {
+      console.error('Save candidates error:', err)
+      addToast('error', 'Gagal menyimpan data paslon. Periksa aturan Firestore.')
+    }
   }
 
   const handleToggleVotingOpen = async (isOpen: boolean) => {
-    await setDoc(settingsDocRef, { isVotingOpen: isOpen }, { merge: true })
-    setIsVotingOpen(isOpen)
-    addToast(
-      isOpen ? 'success' : 'warning',
-      isOpen ? 'Pemilihan resmi DIBUKA.' : 'Pemilihan resmi DITUTUP sementara.'
-    )
+    try {
+      await setDoc(settingsDocRef, { isVotingOpen: isOpen }, { merge: true })
+      setIsVotingOpen(isOpen)
+      addToast(
+        isOpen ? 'success' : 'warning',
+        isOpen ? 'Pemilihan resmi DIBUKA.' : 'Pemilihan resmi DITUTUP sementara.'
+      )
+    } catch (err) {
+      console.error('Toggle voting error:', err)
+      addToast('error', 'Gagal mengubah status pemilihan. Periksa aturan Firestore.')
+    }
   }
 
   const handleResetVotes = async () => {
