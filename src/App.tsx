@@ -690,17 +690,22 @@ export default function App() {
 
         </main>
 
-        {/* Clean Footer with Admin link */}
+        {/* Clean Footer with Developer Credit */}
         <footer className="border-t border-white/10 bg-slate-950/85 backdrop-blur-md py-6 text-center text-xs text-slate-400">
-          <p>
-            © 2026 KPUM • Tiga Serangkai University (TSU) •{' '}
-            <button
-              onClick={() => setIsAdminModalOpen(true)}
-              className="hover:text-white underline cursor-pointer"
-            >
-              {/* Panel Admin */}
-            </button>
-          </p>
+          <div className="space-y-1">
+            <p>© 2026 KPUM • Tiga Serangkai University (TSU)</p>
+            <p className="text-[11px] text-slate-500">
+              Developed with ❤️ by{' '}
+              <a
+                href="https://github.com/mprmdya"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-slate-300 hover:text-white underline transition-colors"
+              >
+                Pramoedya (@mprmdya)
+              </a>
+            </p>
+          </div>
         </footer>
       </div>
     </div>

@@ -200,7 +200,7 @@ service cloud.firestore {
 ## 👥 Hak Akses & Administrasi Default
 
 * **Akses Masuk Admin:** Masuk melalui link **"Panel Admin"** pada footer website.
-* **PIN Admin Default:** `admin123` *(Dapat diganti kapan saja secara aman melalui tab "Kontrol Status Voting" di dalam Panel Admin)*.
+* **PIN Admin Default:** `pemira112233` *(Dapat diganti kapan saja secara aman melalui tab "Kontrol Status Voting" di dalam Panel Admin)*.
 
 ---
 
@@ -209,4 +209,4 @@ service cloud.firestore {
 Dikembangkan untuk **Komisi Pemilihan Umum Mahasiswa (KPUM)**  
 **Tiga Serangkai University (TSU)** — Surakarta, Jawa Tengah.
 
-Didistribusikan di bawah lisensi terbuka untuk tujuan pendidikan dan transparansi pemilu mahasiswa.
+Didistribusikan di bawah lisensi terbuka untuk tujuan pendidikan, inovasi kampus, dan transparansi pemilu mahasiswa.
