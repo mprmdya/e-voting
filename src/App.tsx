@@ -690,22 +690,9 @@ export default function App() {
 
         </main>
 
-        {/* Clean Footer with Developer Credit */}
+        {/* Official Footer */}
         <footer className="border-t border-white/10 bg-slate-950/85 backdrop-blur-md py-6 text-center text-xs text-slate-400">
-          <div className="space-y-1">
-            <p>© 2026 KPUM • Tiga Serangkai University (TSU)</p>
-            <p className="text-[11px] text-slate-500">
-              Developed with ❤️ by{' '}
-              <a
-                href="https://github.com/mprmdya"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-slate-300 hover:text-white underline transition-colors"
-              >
-                Pramoedya (@mprmdya)
-              </a>
-            </p>
-          </div>
+          <p>© 2026 Komisi Pemilihan Umum Mahasiswa (KPUM) • Tiga Serangkai University (TSU)</p>
         </footer>
       </div>
     </div>
