@@ -578,7 +578,7 @@ export default function App() {
 
         {/* Main Container */}
         <main className="max-w-4xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-10 flex-1 space-y-8">
-          
+
           {/* Simple & Clean Header */}
           <div className="text-center space-y-2.5">
             <div className="inline-flex items-center gap-2">
@@ -593,7 +593,7 @@ export default function App() {
             </div>
 
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight drop-shadow-md">
-              Pemilihan Presiden & Wakil Presiden
+              Pemilihan Presiden Mahasiswa & Wakil Presiden Mahasiswa
             </h1>
             <p className="text-xs sm:text-sm text-slate-200 max-w-lg mx-auto drop-shadow-xs">
               Gunakan hak suara Anda secara bijak. Setiap mahasiswa memiliki 1 suara sah yang dihitung secara real-time.
@@ -604,11 +604,10 @@ export default function App() {
               <div className="inline-flex p-1 bg-slate-900/60 backdrop-blur-md border border-white/20 rounded-xl shadow-lg">
                 <button
                   onClick={() => setActiveTab('vote')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === 'vote'
-                      ? 'bg-white text-slate-900 shadow-md'
-                      : 'text-slate-200 hover:text-white'
-                  }`}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'vote'
+                    ? 'bg-white text-slate-900 shadow-md'
+                    : 'text-slate-200 hover:text-white'
+                    }`}
                 >
                   <Vote className="w-3.5 h-3.5" />
                   <span>Bilik Suara</span>
@@ -616,11 +615,10 @@ export default function App() {
 
                 <button
                   onClick={() => setActiveTab('results')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === 'results'
-                      ? 'bg-white text-slate-900 shadow-md'
-                      : 'text-slate-200 hover:text-white'
-                  }`}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'results'
+                    ? 'bg-white text-slate-900 shadow-md'
+                    : 'text-slate-200 hover:text-white'
+                    }`}
                 >
                   <BarChart3 className="w-3.5 h-3.5" />
                   <span>Hasil Suara ({totalVotesCount})</span>
@@ -700,7 +698,7 @@ export default function App() {
               onClick={() => setIsAdminModalOpen(true)}
               className="hover:text-white underline cursor-pointer"
             >
-              Panel Admin
+              {/* Panel Admin */}
             </button>
           </p>
         </footer>
