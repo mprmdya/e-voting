@@ -200,7 +200,7 @@ service cloud.firestore {
 ## 👥 Hak Akses & Administrasi Default
 
 * **Akses Masuk Admin:** Masuk melalui link **"Panel Admin"** pada footer website.
-* **PIN Admin Default:** `pemira112233` *(Dapat diganti kapan saja secara aman melalui tab "Kontrol Status Voting" di dalam Panel Admin)*.
+* **PIN Admin Default:** `admin123` *(Dapat diganti kapan saja secara aman melalui tab "Kontrol Status Voting" di dalam Panel Admin)*.
 
 ---
 
