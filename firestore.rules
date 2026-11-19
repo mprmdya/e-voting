@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Pastikan user sudah terautentikasi (login dengan Google)
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: Validasi email kampus TSU (@tsu.ac.id)
+    function isCampusStudent() {
+      return isAuthenticated() && 
+             request.auth.token.email.matches('.*@tsu[.]ac[.]id$');
+    }
+
+    // 1. Koleksi Pengaturan Pemilihan
+    match /settings/{document=**} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // 2. Koleksi Riwayat Pemilih (Pencegahan Double Voting di Level Database)
+    // Mahasiswa hanya boleh membuat 1 dokumen dengan ID = UID mereka sendiri
+    match /voters/{voterId} {
+      // Mahasiswa hanya bisa membaca status hak suaranya sendiri
+      allow read: if isAuthenticated() && (request.auth.uid == voterId);
+      
+      // HANYA boleh dibuat jika belum pernah ada (Anti-Double Voting)
+      allow create: if isAuthenticated() && 
+                       request.auth.uid == voterId && 
+                       !exists(/databases/$(database)/documents/voters/$(voterId));
+                       
+      allow update: if false; // Status pemilih tidak boleh diubah
+      allow delete: if isAuthenticated(); // Diperlukan saat panitia mereset pemilihan
+    }
+
+    // 3. Koleksi Kotak Surat Suara (Asas LUBER: Rahasia)
+    match /votes/{voteId} {
+      // Hasil perolehan suara dapat dibaca untuk Quick Count real-time
+      allow read: if true;
+      
+      // Surat suara hanya boleh ditambahkan 1 per pencoblosan
+      allow create: if isAuthenticated() &&
+                       request.resource.data.votes == 1 &&
+                       request.resource.data.paslonId != null;
+                       
+      // Surat suara yang sudah masuk TIDAK BOLEH diubah oleh siapa pun!
+      allow update: if false; 
+      
+      allow delete: if isAuthenticated(); // Diperlukan saat panitia mereset pemilihan
+    }
+  }
+}

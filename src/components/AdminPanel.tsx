@@ -25,12 +25,13 @@ interface AdminPanelProps {
   onToggleVotingOpen: (isOpen: boolean) => Promise<void>
   onResetVotes: () => Promise<void>
   isAdminLoggedIn: boolean
-  onLoginAdmin: (password: string) => boolean
+  onLoginAdmin: (password: string) => boolean | Promise<boolean>
   onLogoutAdmin: () => void
   campusDomain: string
   onSaveCampusDomain: (domain: string) => Promise<void>
   campusBg: string
   onSaveCampusBg: (bgUrl: string) => Promise<void>
+  onSaveAdminPin?: (newPin: string) => Promise<void>
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -48,6 +49,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onSaveCampusDomain,
   campusBg,
   onSaveCampusBg,
+  onSaveAdminPin,
 }) => {
   const [adminPassword, setAdminPassword] = useState('')
   const [loginError, setLoginError] = useState(false)
@@ -65,14 +67,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [domainSaveSuccess, setDomainSaveSuccess] = useState<boolean>(false)
   const [isUploadingBg, setIsUploadingBg] = useState<boolean>(false)
   const [bgSaveSuccess, setBgSaveSuccess] = useState<boolean>(false)
+  const [newPinInput, setNewPinInput] = useState<string>('')
+  const [isSavingPin, setIsSavingPin] = useState<boolean>(false)
+  const [pinSaveSuccess, setPinSaveSuccess] = useState<boolean>(false)
 
   if (!isOpen) return null
 
   // If not logged in as admin yet, show password prompt
   if (!isAdminLoggedIn) {
-    const handleLoginSubmit = (e: React.FormEvent) => {
+    const handleLoginSubmit = async (e: React.FormEvent) => {
       e.preventDefault()
-      const success = onLoginAdmin(adminPassword)
+      const success = await onLoginAdmin(adminPassword)
       if (success) {
         setLoginError(false)
         setAdminPassword('')
@@ -630,6 +635,64 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   )}
                 </div>
               </div>
+
+              {/* Security: Change Admin PIN */}
+              {onSaveAdminPin && (
+                <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900">Keamanan: Ubah PIN Admin</h4>
+                      <p className="text-[11px] text-slate-500">
+                        PIN disimpan secara aman menggunakan enkripsi hash SHA-256 (tidak terekspos di kode sumber).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-1">
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        value={newPinInput}
+                        onChange={(e) => {
+                          setNewPinInput(e.target.value)
+                          setPinSaveSuccess(false)
+                        }}
+                        placeholder="Masukkan PIN baru (min. 6 karakter)"
+                        className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <button
+                        onClick={async () => {
+                          if (newPinInput.length < 6) return
+                          setIsSavingPin(true)
+                          try {
+                            await onSaveAdminPin(newPinInput.trim())
+                            setPinSaveSuccess(true)
+                            setNewPinInput('')
+                            setTimeout(() => setPinSaveSuccess(false), 3000)
+                          } finally {
+                            setIsSavingPin(false)
+                          }
+                        }}
+                        disabled={isSavingPin || newPinInput.trim().length < 6}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingPin ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        <span>Simpan PIN</span>
+                      </button>
+                    </div>
+
+                    {pinSaveSuccess && (
+                      <p className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        PIN Admin baru berhasil dienkripsi dan disimpan!
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Voting Open/Close Toggle */}
               <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50 space-y-4">

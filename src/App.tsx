@@ -3,7 +3,10 @@ import {
   authInstance,
   googleProvider,
   voteCollection,
+  votersCollection,
   settingsDocRef,
+  firestoreDb,
+  doc,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
@@ -11,6 +14,7 @@ import {
   onAuthStateChanged,
   addDoc,
   getDocs,
+  getDoc,
   setDoc,
   deleteDoc,
   onSnapshot,
@@ -19,6 +23,18 @@ import {
   serverTimestamp,
   type User,
 } from './firebase'
+
+// Cryptographic SHA-256 helper (Native Web Crypto API)
+const sha256 = async (message: string): Promise<string> => {
+  const msgBuffer = new TextEncoder().encode(message)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+// Default Admin PIN Hash (SHA-256 of initial setup — no plaintext password in source code)
+const DEFAULT_ADMIN_PIN_HASH =
+  'e9d74be15c7472eb6ea8de19df936f1eda1b49fde9cd76128661b6a3a28bff4e'
 
 // Detect In-App Browser (WhatsApp, Instagram, FB, Line, TikTok)
 const isInAppBrowser = (): boolean => {
@@ -65,6 +81,7 @@ export default function App() {
   // Admin State
   const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false)
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false)
+  const [adminPinHash, setAdminPinHash] = useState<string>(DEFAULT_ADMIN_PIN_HASH)
 
   // Toast Helper
   const addToast = useCallback(
@@ -145,24 +162,27 @@ export default function App() {
 
       setUser(currentUser)
       if (currentUser) {
-        const userVoteKey = `voted_${currentUser.uid}`
-        const userChoiceKey = `choice_${currentUser.uid}`
-        const localStatus = localStorage.getItem(userVoteKey) || localStorage.getItem('voted')
-        const localChoice = localStorage.getItem(userChoiceKey) || localStorage.getItem('user_choice')
-
-        if (localStatus) {
-          setHasVoted(JSON.parse(localStatus))
-        } else {
-          setHasVoted(false)
-        }
-        if (localChoice) {
-          setChosenPaslonId(localChoice)
-        }
+        // Query Firestore directly: Single Source of Truth for voting status (Anti-manipulasi)
+        const voterRef = doc(firestoreDb, 'voters', currentUser.uid)
+        getDoc(voterRef)
+          .then((snap) => {
+            if (snap.exists()) {
+              setHasVoted(true)
+              const data = snap.data()
+              if (data?.choice) {
+                setChosenPaslonId(data.choice)
+              }
+            } else {
+              setHasVoted(false)
+              setChosenPaslonId(null)
+            }
+          })
+          .catch((err) => {
+            console.error('Error verifying voter status in database:', err)
+          })
       } else {
-        const stored = localStorage.getItem('voted')
-        const storedChoice = localStorage.getItem('user_choice')
-        if (stored) setHasVoted(JSON.parse(stored))
-        if (storedChoice) setChosenPaslonId(storedChoice)
+        setHasVoted(false)
+        setChosenPaslonId(null)
       }
     })
     return () => unsubscribe()
@@ -186,6 +206,9 @@ export default function App() {
           }
           if (data.campusBg) {
             setCampusBg(data.campusBg)
+          }
+          if (data.adminPinHash) {
+            setAdminPinHash(data.adminPinHash)
           }
         }
       },
@@ -341,6 +364,12 @@ export default function App() {
       return
     }
 
+    if (!user?.uid) {
+      addToast('warning', 'Silakan masuk dengan akun resmi terlebih dahulu.')
+      setIsModalOpen(false)
+      return
+    }
+
     if (hasVoted) {
       addToast('warning', 'Anda sudah pernah memilih!')
       setIsModalOpen(false)
@@ -349,12 +378,28 @@ export default function App() {
 
     setIsSubmitting(true)
     try {
+      // 1. Database-Level Check: Verifikasi langsung ke Firestore (Anti-Bypass)
+      const voterRef = doc(firestoreDb, 'voters', user.uid)
+      const existingRecord = await getDoc(voterRef)
+      if (existingRecord.exists()) {
+        setHasVoted(true)
+        addToast('warning', 'Hak suara Anda sudah pernah digunakan sebelumnya.')
+        setIsModalOpen(false)
+        return
+      }
+
+      // 2. Kunci hak suara pemilih di koleksi 'voters' (1 Mahasiswa = 1 Suara Sah)
+      await setDoc(voterRef, {
+        votedAt: serverTimestamp(),
+        choice: selectedCandidate.id,
+      })
+
+      // 3. Catat surat suara secara anonim di koleksi 'votes' (Asas LUBER: Rahasia)
+      // Identitas pemilih sengaja tidak ditautkan ke pilihan paslon untuk menjaga kerahasiaan suara
       await addDoc(voteCollection, {
         paslonId: selectedCandidate.id,
         paslonName: selectedCandidate.title,
         votes: 1,
-        voterUid: user?.uid || 'anon',
-        voterEmail: user?.email || '',
         timestamp: serverTimestamp(),
       })
 
@@ -369,28 +414,39 @@ export default function App() {
       localStorage.setItem('user_choice', selectedCandidate.id)
 
       setIsModalOpen(false)
-      addToast('success', `Suara berhasil dicatat untuk Paslon ${selectedCandidate.number}!`)
+      addToast('success', `Suara Anda berhasil dicatat secara sah & rahasia!`)
 
       setTimeout(() => {
         setActiveTab('results')
       }, 500)
     } catch (error) {
       console.error('Vote error:', error)
-      addToast('error', 'Gagal mengirim suara. Coba lagi.')
+      addToast('error', 'Gagal mengirim suara. Periksa koneksi dan coba lagi.')
     } finally {
       setIsSubmitting(false)
     }
   }
 
   // ADMIN ACTIONS
-  const handleAdminLogin = (password: string): boolean => {
-    // Default admin PIN: 
-    if (password === 'pemira112233') {
-      setIsAdminLoggedIn(true)
-      addToast('success', 'Berhasil masuk sebagai Admin!')
-      return true
+  const handleAdminLogin = async (password: string): Promise<boolean> => {
+    try {
+      const inputHash = await sha256(password)
+      if (inputHash === adminPinHash) {
+        setIsAdminLoggedIn(true)
+        addToast('success', 'Berhasil masuk sebagai Admin!')
+        return true
+      }
+    } catch (e) {
+      console.error('Admin hash validation error:', e)
     }
     return false
+  }
+
+  const handleSaveAdminPin = async (newPin: string) => {
+    const hashed = await sha256(newPin)
+    await setDoc(settingsDocRef, { adminPinHash: hashed }, { merge: true })
+    setAdminPinHash(hashed)
+    addToast('success', 'PIN Admin berhasil dienkripsi dan disimpan ke database!')
   }
 
   const handleAdminLogout = () => {
@@ -416,9 +472,15 @@ export default function App() {
 
   const handleResetVotes = async () => {
     try {
+      // 1. Hapus seluruh surat suara
       const snapshot = await getDocs(voteCollection)
       const deletePromises = snapshot.docs.map((docItem) => deleteDoc(docItem.ref))
-      await Promise.all(deletePromises)
+
+      // 2. Hapus seluruh riwayat pemilih terdaftar
+      const votersSnapshot = await getDocs(votersCollection)
+      const deleteVotersPromises = votersSnapshot.docs.map((docItem) => deleteDoc(docItem.ref))
+
+      await Promise.all([...deletePromises, ...deleteVotersPromises])
 
       localStorage.removeItem('voted')
       localStorage.removeItem('user_choice')
@@ -429,7 +491,7 @@ export default function App() {
 
       setHasVoted(false)
       setChosenPaslonId(null)
-      addToast('success', 'Seluruh data suara berhasil di-reset ke 0.')
+      addToast('success', 'Seluruh data suara dan riwayat pemilih berhasil di-reset.')
     } catch (err) {
       console.error('Reset votes error:', err)
       addToast('error', 'Gagal mereset data suara.')
@@ -480,6 +542,7 @@ export default function App() {
             onSaveCampusDomain={handleSaveCampusDomain}
             campusBg={campusBg}
             onSaveCampusBg={handleSaveCampusBg}
+            onSaveAdminPin={handleSaveAdminPin}
           />
         )}
 

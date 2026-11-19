@@ -39,6 +39,7 @@ const db = getFirestore(app)
 const auth = getAuth(app)
 
 export const voteCollection = collection(db, 'votes')
+export const votersCollection = collection(db, 'voters')
 export const settingsDocRef = doc(db, 'settings', 'election')
 export const firestoreDb = db
 export const authInstance = auth
