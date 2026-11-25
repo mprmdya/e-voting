@@ -2,40 +2,53 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['buahmolin@gmail.com'];
+    }
+
     // 1. Pengaturan Pemilihan (Buka/Tutup voting, background, data paslon)
-    // Diizinkan baca & tulis agar tombol Buka/Tutup Suara di Panel Admin berfungsi
+    // Semua pengunjung boleh membaca pengaturan, tapi HANYA Admin terverifikasi yang boleh mengubah
     match /settings/{document=**} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // 2. Riwayat Pemilih (Mencegah Double Voting)
     match /voters/{voterId} {
-      // Izinkan baca status pemilih & getDocs saat reset pemilihan
-      allow read: if true;
-      
-      // HANYA boleh dibuat jika dokumen belum ada sebelumnya (Anti-Double Voting)
-      allow create: if !exists(/databases/$(database)/documents/voters/$(voterId));
-      
+      // Pemilih hanya boleh membaca status miliknya sendiri; Admin boleh membaca semua untuk rekap/export
+      allow read: if (isSignedIn() && request.auth.uid == voterId) || isAdmin();
+
+      // HANYA boleh dibuat oleh pemilik UID sendiri dan jika belum pernah memilih (Anti-Double Voting)
+      allow create: if isSignedIn()
+        && request.auth.uid == voterId
+        && !exists(/databases/$(database)/documents/voters/$(voterId));
+
       // Status hak suara yang sudah masuk TIDAK BOLEH diubah/dimanipulasi
-      allow update: if false; 
-      
-      // Diizinkan hapus saat panitia melakukan reset suara
-      allow delete: if true; 
+      allow update: if false;
+
+      // HANYA Admin yang boleh menghapus saat reset pemilihan
+      allow delete: if isAdmin();
     }
 
     // 3. Kotak Surat Suara (Asas LUBER: Rahasia & Anti-Tamper)
     match /votes/{voteId} {
-      // Hasil perolehan suara dapat dibaca untuk Quick Count real-time
-      allow read: if true;
-      
-      // Surat suara hanya boleh ditambahkan bernilai 1 suara per submit
-      allow create: if request.resource.data.votes == 1;
-      
+      // Hasil perolehan suara HANYA boleh dibaca oleh Admin
+      allow read: if isAdmin();
+
+      // Surat suara hanya boleh ditambahkan oleh pengguna yang login & bernilai 1 suara per submit
+      allow create: if isSignedIn() && request.resource.data.votes == 1;
+
       // Surat suara yang sudah masuk TIDAK BOLEH diubah/diedit oleh siapa pun!
-      allow update: if false; 
-      
-      // Diizinkan hapus saat panitia melakukan reset suara
-      allow delete: if true; 
+      allow update: if false;
+
+      // HANYA Admin yang boleh menghapus saat reset suara
+      allow delete: if isAdmin();
     }
   }
 }

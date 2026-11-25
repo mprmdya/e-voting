@@ -1,6 +1,7 @@
 import React from 'react'
-import { Vote, X, Loader2 } from 'lucide-react'
+import { X, Loader2 } from 'lucide-react'
 import type { Candidate } from '../data/paslonData'
+import { TSU_LOGO_URL } from '../constants'
 
 interface VoteModalProps {
   candidate: Candidate | null
@@ -25,10 +26,12 @@ export const VoteModal: React.FC<VoteModalProps> = ({
         
         {/* Top Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Vote className="w-4 h-4" />
-            </div>
+          <div className="flex items-center gap-2.5">
+            <img
+              src={TSU_LOGO_URL}
+              alt="Logo TSU"
+              className="h-6 w-auto object-contain shrink-0"
+            />
             <h4 className="font-bold text-slate-900 text-sm">Konfirmasi Pilihan</h4>
           </div>
           <button

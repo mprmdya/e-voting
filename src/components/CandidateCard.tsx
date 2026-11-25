@@ -17,7 +17,7 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
 }) => {
   return (
     <div
-      className={`relative flex flex-col bg-white rounded-2xl border transition-all duration-200 p-6 shadow-xs hover:shadow-md ${
+      className={`relative flex flex-col bg-white rounded-2xl border transition-all duration-200 p-4 sm:p-6 shadow-xs hover:shadow-md ${
         isChosen
           ? 'border-emerald-500 ring-2 ring-emerald-500/20'
           : `border-slate-200 ${candidate.theme.borderHover}`
@@ -40,7 +40,7 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
       </div>
 
       {/* Candidates Photos & Names */}
-      <div className="grid grid-cols-2 gap-3 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 mb-5">
         {/* Pres */}
         <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-100">
           <img

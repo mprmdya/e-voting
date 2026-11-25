@@ -1,7 +1,8 @@
 import React from 'react'
-import { Vote, LogOut, Shield } from 'lucide-react'
+import { LogOut, Shield } from 'lucide-react'
 import { FcGoogle } from 'react-icons/fc'
 import type { User } from '../firebase'
+import { TSU_LOGO_URL } from '../constants'
 
 interface NavbarProps {
   user: User | null
@@ -22,16 +23,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   return (
     <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur-md sticky top-0 z-30">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
         
         {/* Brand */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-xs">
-            <Vote className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-slate-900 text-base tracking-tight">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+          <img
+            src={TSU_LOGO_URL}
+            alt="Logo Universitas Tiga Serangkai"
+            className="h-7 sm:h-9 w-auto object-contain shrink-0"
+          />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="font-extrabold text-slate-900 text-sm sm:text-base tracking-tight truncate">
                 PEMIRA <span className="text-blue-600">TSU</span>
               </span>
               <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -46,7 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Right Nav: Admin + User Auth */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {/* Admin Button */}
           <button
             onClick={onOpenAdmin}
@@ -59,7 +62,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* User Section */}
           {user ? (
-            <div className="flex items-center gap-2.5 pl-3 py-1 pr-1.5 rounded-full bg-slate-100/80 border border-slate-200 text-xs">
+            <div className="flex items-center gap-1.5 sm:gap-2.5 pl-1.5 sm:pl-3 py-1 pr-1 sm:pr-1.5 rounded-full bg-slate-100/80 border border-slate-200 text-xs">
               <div className="flex items-center gap-2">
                 {user.photoURL ? (
                   <img

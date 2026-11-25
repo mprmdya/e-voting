@@ -51,6 +51,13 @@ const isInAppBrowser = (): boolean => {
 }
 import { PASLON_LIST, type Candidate } from './data/paslonData'
 import type { TabType, ToastMessage, VoterRecord } from './types'
+import { TSU_LOGO_URL, ADMIN_EMAILS } from './constants'
+
+const isEmailAllowed = (email: string, campusDomain: string): boolean => {
+  const clean = email.toLowerCase().trim()
+  const domainCheck = campusDomain.toLowerCase().trim()
+  return ADMIN_EMAILS.includes(clean) || !domainCheck || clean.endsWith(domainCheck)
+}
 import { Navbar } from './components/Navbar'
 import { CandidateCard } from './components/CandidateCard'
 import { ResultsView } from './components/ResultsView'
@@ -104,9 +111,8 @@ export default function App() {
         if (!result) return
         const loggedUser = result.user
         const email = (loggedUser.email || '').toLowerCase().trim()
-        const domainCheck = campusDomain.toLowerCase().trim()
 
-        if (domainCheck && !email.endsWith(domainCheck)) {
+        if (!isEmailAllowed(email, campusDomain)) {
           signOut(authInstance)
           setUser(null)
           addToast(
@@ -149,8 +155,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
       if (currentUser && currentUser.email) {
         const email = currentUser.email.toLowerCase().trim()
-        const domainCheck = campusDomain.toLowerCase().trim()
-        if (domainCheck && !email.endsWith(domainCheck)) {
+        if (!isEmailAllowed(email, campusDomain)) {
           signOut(authInstance)
           setUser(null)
           addToast(
@@ -287,10 +292,9 @@ export default function App() {
       const result = await signInWithPopup(authInstance, googleProvider)
       const loggedUser = result.user
       const email = (loggedUser.email || '').toLowerCase().trim()
-      const domainCheck = campusDomain.toLowerCase().trim()
 
-      // Pengecekan Domain Kampus @tsu.ac.id
-      if (domainCheck && !email.endsWith(domainCheck)) {
+      // Pengecekan Domain Kampus (kecuali akun Admin terdaftar)
+      if (!isEmailAllowed(email, campusDomain)) {
         await signOut(authInstance)
         setUser(null)
         addToast(
@@ -369,6 +373,11 @@ export default function App() {
     try {
       await signOut(authInstance)
       setUser(null)
+      setIsAdminLoggedIn(false)
+      setIsAdminModalOpen(false)
+      setActiveTab('vote')
+      setVotes(new Map())
+      setVotersList([])
       addToast('info', 'Anda telah keluar akun.')
     } catch (error) {
       console.error('Logout error:', error)
@@ -467,8 +476,20 @@ export default function App() {
     }
   }
 
+  const isAuthorizedAdminUser = Boolean(
+    user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim())
+  )
+
   // ADMIN ACTIONS
   const handleAdminLogin = async (password: string): Promise<boolean> => {
+    if (!isAuthorizedAdminUser) {
+      addToast(
+        'error',
+        `Akses Admin ditolak. Harap login Google dengan akun admin (${ADMIN_EMAILS[0]}) terlebih dahulu.`
+      )
+      return false
+    }
+
     try {
       const inputHash = await sha256(password)
       if (inputHash === adminPinHash) {
@@ -554,7 +575,7 @@ export default function App() {
   const totalVotesCount = Array.from(votes.values()).reduce((sum, v) => sum + v, 0)
 
   return (
-    <div className="min-h-screen relative flex flex-col font-sans selection:bg-blue-600 selection:text-white">
+    <div className="min-h-dvh relative flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       {/* Background Campus Image Layer */}
       <div
         className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-all duration-700"
@@ -566,7 +587,7 @@ export default function App() {
       <div className="fixed inset-0 z-0 bg-slate-950/75 backdrop-blur-[2px] pointer-events-none" />
 
       {/* Main Foreground Content */}
-      <div className="relative z-10 flex flex-col min-h-screen">
+      <div className="relative z-10 flex flex-col min-h-dvh">
         <Toast toasts={toasts} onDismiss={dismissToast} />
 
         {/* Confirmation Modal */}
@@ -597,6 +618,8 @@ export default function App() {
             onSaveCampusBg={handleSaveCampusBg}
             onSaveAdminPin={handleSaveAdminPin}
             votersList={votersList}
+            isAuthorizedAdminUser={isAuthorizedAdminUser}
+            onGoogleLogin={handleGoogleLogin}
           />
         )}
 
@@ -611,11 +634,11 @@ export default function App() {
         />
 
         {/* Main Container */}
-        <main className="max-w-4xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-10 flex-1 space-y-8">
+        <main className="max-w-4xl w-full mx-auto px-3.5 sm:px-6 py-6 sm:py-10 flex-1 space-y-6 sm:space-y-8">
 
           {/* Simple & Clean Header */}
           <div className="text-center space-y-2.5">
-            <div className="inline-flex items-center gap-2">
+            <div className="inline-flex flex-wrap items-center justify-center gap-2">
               <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold bg-white/15 text-white border border-white/25 backdrop-blur-md tracking-wider uppercase">
                 PEMIRA Tiga Serangkai University (TSU)
               </span>
@@ -691,7 +714,7 @@ export default function App() {
 
           {/* Auth prompt if not logged in */}
           {!user && activeTab === 'vote' && isVotingOpen && (
-            <div className="max-w-xl mx-auto flex items-center justify-between gap-3 p-3.5 rounded-xl bg-amber-950/70 backdrop-blur-md border border-amber-500/30 text-amber-200 text-xs shadow-lg">
+            <div className="max-w-xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 p-3.5 rounded-xl bg-amber-950/70 backdrop-blur-md border border-amber-500/30 text-amber-200 text-xs shadow-lg">
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
                 <span>
@@ -728,7 +751,16 @@ export default function App() {
 
         {/* Official Footer */}
         <footer className="border-t border-white/10 bg-slate-950/85 backdrop-blur-md py-6 text-center text-xs text-slate-400">
-          <p>© 2026 Komisi Pemilihan Umum Mahasiswa (KPUM) • Tiga Serangkai University (TSU)</p>
+          <div className="max-w-4xl mx-auto px-4 flex flex-col items-center gap-2.5">
+            <div className="inline-flex items-center justify-center bg-white/95 px-3 py-1 rounded-xl shadow-xs">
+              <img
+                src={TSU_LOGO_URL}
+                alt="Logo Universitas Tiga Serangkai"
+                className="h-6 w-auto object-contain"
+              />
+            </div>
+            <p>© 2026 Komisi Pemilihan Umum Mahasiswa (KPUM) • Tiga Serangkai University (TSU)</p>
+          </div>
         </footer>
       </div>
     </div>
