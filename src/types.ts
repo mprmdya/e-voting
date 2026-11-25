@@ -5,3 +5,10 @@ export interface ToastMessage {
   type: 'success' | 'error' | 'warning' | 'info'
   message: string
 }
+
+export interface VoterRecord {
+  id: string
+  name: string
+  email: string
+  votedAt: Date | null
+}

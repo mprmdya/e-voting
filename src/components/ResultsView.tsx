@@ -1,6 +1,7 @@
 import React from 'react'
-import { Trophy, Users, Radio, Sparkles } from 'lucide-react'
+import { Trophy, Users, Radio, Sparkles, FileSpreadsheet } from 'lucide-react'
 import type { Candidate } from '../data/paslonData'
+import { exportResultsToCsv } from '../utils/exportCsv'
 
 interface ResultsViewProps {
   candidates: Candidate[]
@@ -61,10 +62,19 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ candidates, votes }) =
             <h3 className="font-bold text-slate-900 text-base">Hasil Perolehan Suara</h3>
             <p className="text-xs text-slate-500">Data ter-update otomatis dari database Firestore.</p>
           </div>
-          <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
-            <Sparkles className="w-3 h-3 text-blue-500" />
-            Quick Count
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+              <Sparkles className="w-3 h-3 text-blue-500" />
+              Quick Count
+            </span>
+            <button
+              onClick={() => exportResultsToCsv(candidates, votes)}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold transition-colors cursor-pointer"
+            >
+              <FileSpreadsheet className="w-3 h-3" />
+              <span>Export (.csv)</span>
+            </button>
+          </div>
         </div>
 
         {totalVotes === 0 ? (

@@ -12,9 +12,13 @@ import {
   User,
   Upload,
   GraduationCap,
+  FileSpreadsheet,
+  Users,
 } from 'lucide-react'
 import type { Candidate } from '../data/paslonData'
+import type { VoterRecord } from '../types'
 import { compressImageFile } from '../utils/imageCompress'
+import { exportVotersToCsv } from '../utils/exportCsv'
 
 interface AdminPanelProps {
   isOpen: boolean
@@ -32,6 +36,7 @@ interface AdminPanelProps {
   campusBg: string
   onSaveCampusBg: (bgUrl: string) => Promise<void>
   onSaveAdminPin?: (newPin: string) => Promise<void>
+  votersList: VoterRecord[]
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -50,10 +55,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   campusBg,
   onSaveCampusBg,
   onSaveAdminPin,
+  votersList,
 }) => {
   const [adminPassword, setAdminPassword] = useState('')
   const [loginError, setLoginError] = useState(false)
-  const [activeTab, setActiveTab] = useState<'candidates' | 'settings' | 'reset'>('candidates')
+  const [activeTab, setActiveTab] = useState<'candidates' | 'voters' | 'settings' | 'reset'>('candidates')
   const [selectedCandidateIndex, setSelectedCandidateIndex] = useState<number>(0)
   const [formData, setFormData] = useState<Candidate[]>(() => JSON.parse(JSON.stringify(candidates)))
   const [isSaving, setIsSaving] = useState(false)
@@ -260,10 +266,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-slate-200 bg-slate-50 px-4 sm:px-6 gap-2 shrink-0">
+        <div className="flex border-b border-slate-200 bg-slate-50 px-4 sm:px-6 gap-2 shrink-0 overflow-x-auto">
           <button
             onClick={() => setActiveTab('candidates')}
-            className={`py-3 px-3 text-xs font-bold border-b-2 cursor-pointer transition-all ${activeTab === 'candidates'
+            className={`py-3 px-3 text-xs font-bold border-b-2 cursor-pointer transition-all whitespace-nowrap ${activeTab === 'candidates'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
@@ -271,8 +277,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             Edit Pasangan Calon
           </button>
           <button
+            onClick={() => setActiveTab('voters')}
+            className={`py-3 px-3 text-xs font-bold border-b-2 cursor-pointer transition-all whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'voters'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Daftar Pemilih ({votersList.length})</span>
+          </button>
+          <button
             onClick={() => setActiveTab('settings')}
-            className={`py-3 px-3 text-xs font-bold border-b-2 cursor-pointer transition-all ${activeTab === 'settings'
+            className={`py-3 px-3 text-xs font-bold border-b-2 cursor-pointer transition-all whitespace-nowrap ${activeTab === 'settings'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
@@ -281,7 +297,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('reset')}
-            className={`py-3 px-3 text-xs font-bold border-b-2 cursor-pointer transition-all ${activeTab === 'reset'
+            className={`py-3 px-3 text-xs font-bold border-b-2 cursor-pointer transition-all whitespace-nowrap ${activeTab === 'reset'
                 ? 'border-rose-600 text-rose-600'
                 : 'border-transparent text-slate-500 hover:text-rose-600'
               }`}
@@ -292,6 +308,76 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         {/* Modal Scrollable Body */}
         <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-6">
+
+          {/* TAB: VOTER LIST & SPREADSHEET EXPORT */}
+          {activeTab === 'voters' && (
+            <div className="space-y-4">
+              <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900">
+                        Daftar Pemilih yang Sudah Mengisi ({votersList.length})
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Unduh daftar hadir pemilih ke format spreadsheet (.csv) untuk Excel / Google Sheets.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => exportVotersToCsv(votersList)}
+                    disabled={votersList.length === 0}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>Download Spreadsheet (.csv)</span>
+                  </button>
+                </div>
+
+                {votersList.length === 0 ? (
+                  <div className="text-center py-8 text-xs text-slate-400 bg-white rounded-xl border border-slate-200/70">
+                    Belum ada pemilih yang mengisi suara.
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="max-h-80 overflow-y-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-100 text-slate-600 font-bold sticky top-0">
+                          <tr>
+                            <th className="py-2.5 px-3 w-10">No</th>
+                            <th className="py-2.5 px-3">Nama</th>
+                            <th className="py-2.5 px-3">Email</th>
+                            <th className="py-2.5 px-3">Waktu Memilih</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {votersList.map((voter, idx) => (
+                            <tr key={voter.id} className="hover:bg-slate-50/80">
+                              <td className="py-2 px-3 text-slate-500 font-medium">{idx + 1}</td>
+                              <td className="py-2 px-3 font-semibold text-slate-800">{voter.name}</td>
+                              <td className="py-2 px-3 text-slate-600 font-mono text-[11px]">{voter.email}</td>
+                              <td className="py-2 px-3 text-slate-500">
+                                {voter.votedAt
+                                  ? voter.votedAt.toLocaleString('id-ID', {
+                                      dateStyle: 'medium',
+                                      timeStyle: 'short',
+                                    })
+                                  : '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* TAB 1: EDIT CANDIDATES */}
           {activeTab === 'candidates' && (
@@ -702,7 +788,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <p className="text-xs text-slate-500 mt-0.5">
                       {isVotingOpen
                         ? 'Voting sedang dibuka. Mahasiswa dapat memberikan suara.'
-                        : 'Voting ditutup sementara. Mahasiswa hanya bisa melihat hasil.'}
+                        : 'Voting ditutup sementara. Mahasiswa tidak dapat memberikan suara.'}
                     </p>
                   </div>
                   <span

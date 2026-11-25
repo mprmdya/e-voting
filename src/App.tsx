@@ -50,7 +50,7 @@ const isInAppBrowser = (): boolean => {
   )
 }
 import { PASLON_LIST, type Candidate } from './data/paslonData'
-import type { TabType, ToastMessage } from './types'
+import type { TabType, ToastMessage, VoterRecord } from './types'
 import { Navbar } from './components/Navbar'
 import { CandidateCard } from './components/CandidateCard'
 import { ResultsView } from './components/ResultsView'
@@ -69,6 +69,7 @@ export default function App() {
   const [campusDomain, setCampusDomain] = useState<string>('@tsu.ac.id')
   const [campusBg, setCampusBg] = useState<string>(DEFAULT_CAMPUS_BG)
   const [votes, setVotes] = useState<Map<string, number>>(new Map())
+  const [votersList, setVotersList] = useState<VoterRecord[]>([])
   const [hasVoted, setHasVoted] = useState<boolean>(false)
   const [chosenPaslonId, setChosenPaslonId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>('vote')
@@ -219,11 +220,13 @@ export default function App() {
     return () => unsub()
   }, [])
 
-  // Real-time Firestore Vote Listener
+  // Real-time Firestore Vote & Voters Listener (Admin Only)
   useEffect(() => {
-    const q = query(voteCollection, orderBy('timestamp', 'desc'))
-    const unsub = onSnapshot(
-      q,
+    if (!isAdminLoggedIn) return
+
+    const qVotes = query(voteCollection, orderBy('timestamp', 'desc'))
+    const unsubVotes = onSnapshot(
+      qVotes,
       (snapshot) => {
         const voteMap = new Map<string, number>()
         snapshot.forEach((doc) => {
@@ -238,8 +241,37 @@ export default function App() {
         console.error('Firestore listener error:', error)
       }
     )
-    return () => unsub()
-  }, [])
+
+    const unsubVoters = onSnapshot(
+      votersCollection,
+      (snapshot) => {
+        const list: VoterRecord[] = []
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data()
+          const votedAt =
+            data.votedAt && typeof data.votedAt.toDate === 'function'
+              ? (data.votedAt.toDate() as Date)
+              : null
+          list.push({
+            id: docSnap.id,
+            name: typeof data.name === 'string' && data.name ? data.name : '-',
+            email: typeof data.email === 'string' && data.email ? data.email : '-',
+            votedAt,
+          })
+        })
+        list.sort((a, b) => (b.votedAt?.getTime() ?? 0) - (a.votedAt?.getTime() ?? 0))
+        setVotersList(list)
+      },
+      (error) => {
+        console.error('Firestore voters listener error:', error)
+      }
+    )
+
+    return () => {
+      unsubVotes()
+      unsubVoters()
+    }
+  }, [isAdminLoggedIn])
 
   // Google Login — popup default, fallback to redirect if popup is blocked
   const handleGoogleLogin = async () => {
@@ -400,6 +432,8 @@ export default function App() {
 
       // 2. Kunci hak suara pemilih di koleksi 'voters' (1 Mahasiswa = 1 Suara Sah)
       await setDoc(voterRef, {
+        name: user.displayName || 'Mahasiswa',
+        email: user.email || '',
         votedAt: serverTimestamp(),
         choice: selectedCandidate.id,
       })
@@ -425,10 +459,6 @@ export default function App() {
 
       setIsModalOpen(false)
       addToast('success', `Suara Anda berhasil dicatat secara sah & rahasia!`)
-
-      setTimeout(() => {
-        setActiveTab('results')
-      }, 500)
     } catch (error) {
       console.error('Vote error:', error)
       addToast('error', 'Gagal mengirim suara. Periksa koneksi dan coba lagi.')
@@ -462,6 +492,9 @@ export default function App() {
   const handleAdminLogout = () => {
     setIsAdminLoggedIn(false)
     setIsAdminModalOpen(false)
+    setActiveTab('vote')
+    setVotes(new Map())
+    setVotersList([])
     addToast('info', 'Keluar dari mode admin.')
   }
 
@@ -563,6 +596,7 @@ export default function App() {
             campusBg={campusBg}
             onSaveCampusBg={handleSaveCampusBg}
             onSaveAdminPin={handleSaveAdminPin}
+            votersList={votersList}
           />
         )}
 
@@ -599,32 +633,34 @@ export default function App() {
               Gunakan hak suara Anda secara bijak. Setiap mahasiswa memiliki 1 suara sah yang dihitung secara real-time.
             </p>
 
-            {/* Simple Tab Switcher */}
-            <div className="pt-4 flex justify-center">
-              <div className="inline-flex p-1 bg-slate-900/60 backdrop-blur-md border border-white/20 rounded-xl shadow-lg">
-                <button
-                  onClick={() => setActiveTab('vote')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'vote'
-                    ? 'bg-white text-slate-900 shadow-md'
-                    : 'text-slate-200 hover:text-white'
-                    }`}
-                >
-                  <Vote className="w-3.5 h-3.5" />
-                  <span>Bilik Suara</span>
-                </button>
+            {/* Simple Tab Switcher (Hasil Suara hanya untuk Admin) */}
+            {isAdminLoggedIn && (
+              <div className="pt-4 flex justify-center">
+                <div className="inline-flex p-1 bg-slate-900/60 backdrop-blur-md border border-white/20 rounded-xl shadow-lg">
+                  <button
+                    onClick={() => setActiveTab('vote')}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'vote'
+                      ? 'bg-white text-slate-900 shadow-md'
+                      : 'text-slate-200 hover:text-white'
+                      }`}
+                  >
+                    <Vote className="w-3.5 h-3.5" />
+                    <span>Bilik Suara</span>
+                  </button>
 
-                <button
-                  onClick={() => setActiveTab('results')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'results'
-                    ? 'bg-white text-slate-900 shadow-md'
-                    : 'text-slate-200 hover:text-white'
-                    }`}
-                >
-                  <BarChart3 className="w-3.5 h-3.5" />
-                  <span>Hasil Suara ({totalVotesCount})</span>
-                </button>
+                  <button
+                    onClick={() => setActiveTab('results')}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'results'
+                      ? 'bg-white text-slate-900 shadow-md'
+                      : 'text-slate-200 hover:text-white'
+                      }`}
+                  >
+                    <BarChart3 className="w-3.5 h-3.5" />
+                    <span>Hasil Suara ({totalVotesCount})</span>
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* WhatsApp / In-App Browser Notice */}
@@ -672,7 +708,9 @@ export default function App() {
           )}
 
           {/* View Switcher Content */}
-          {activeTab === 'vote' ? (
+          {activeTab === 'results' && isAdminLoggedIn ? (
+            <ResultsView candidates={candidates} votes={votes} />
+          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
               {candidates.map((candidate) => (
                 <CandidateCard
@@ -684,8 +722,6 @@ export default function App() {
                 />
               ))}
             </div>
-          ) : (
-            <ResultsView candidates={candidates} votes={votes} />
           )}
 
         </main>
