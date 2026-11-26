@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   authInstance,
   googleProvider,
@@ -23,9 +23,16 @@ import {
   serverTimestamp,
   type User,
 } from './firebase'
-
-// NOTE: Admin emails are loaded dynamically from Firestore collection `config/admins`.
-// The list is stored in state `adminEmails` and used to determine admin status.
+import { PASLON_LIST, type Candidate } from './data/paslonData'
+import type { TabType, ToastMessage, VoterRecord } from './types'
+import { TSU_LOGO_URL } from './constants'
+import { Navbar } from './components/Navbar'
+import { CandidateCard } from './components/CandidateCard'
+import { ResultsView } from './components/ResultsView'
+import { VoteModal } from './components/VoteModal'
+import { AdminPanel } from './components/AdminPanel'
+import { Toast } from './components/Toast'
+import { Vote, BarChart3, AlertCircle, AlertTriangle } from 'lucide-react'
 
 // Detect In-App Browser (WhatsApp, Instagram, FB, Line, TikTok)
 const isInAppBrowser = (): boolean => {
@@ -40,48 +47,39 @@ const isInAppBrowser = (): boolean => {
     ua.includes('micromessenger')
   )
 }
-import { PASLON_LIST, type Candidate } from './data/paslonData'
-import type { TabType, ToastMessage, VoterRecord } from './types'
-import { TSU_LOGO_URL } from './constants'
 
-const isEmailAllowed = (email: string, campusDomain: string): boolean => {
+const isEmailAllowed = (email: string, campusDomain: string, admins: string[] = []): boolean => {
   const clean = email.toLowerCase().trim()
   const domainCheck = campusDomain.toLowerCase().trim()
+  if (admins.includes(clean)) return true
   return !domainCheck || clean.endsWith(domainCheck)
 }
-import { Navbar } from './components/Navbar'
-import { CandidateCard } from './components/CandidateCard'
-import { ResultsView } from './components/ResultsView'
-import { VoteModal } from './components/VoteModal'
-import { AdminPanel } from './components/AdminPanel'
-import { Toast } from './components/Toast'
-import { Vote, BarChart3, AlertCircle, AlertTriangle } from 'lucide-react'
 
 const DEFAULT_CAMPUS_BG =
   'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=1920&q=80'
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null)
-  const [candidates, setCandidates] = useState<Candidate[]>(PASLON_LIST)
-  const [isVotingOpen, setIsVotingOpen] = useState<boolean>(true)
-  const [campusDomain, setCampusDomain] = useState<string>('@tsu.ac.id')
-  const [campusBg, setCampusBg] = useState<string>(DEFAULT_CAMPUS_BG)
-  const [votes, setVotes] = useState<Map<string, number>>(new Map())
-  const [votersList, setVotersList] = useState<VoterRecord[]>([])
-  const [hasVoted, setHasVoted] = useState<boolean>(false)
-  const [chosenPaslonId, setChosenPaslonId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<TabType>('vote')
-  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
-  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false)
-  const [toasts, setToasts] = useState<ToastMessage[]>([])
+  const [user, setUser] = useState(null as User | null)
+  const [candidates, setCandidates] = useState(PASLON_LIST as Candidate[])
+  const [isVotingOpen, setIsVotingOpen] = useState(true)
+  const [campusDomain, setCampusDomain] = useState('@tsu.ac.id')
+  const [campusBg, setCampusBg] = useState(DEFAULT_CAMPUS_BG)
+  const [votes, setVotes] = useState(() => new Map())
+  const [votersList, setVotersList] = useState([] as VoterRecord[])
+  const [hasVoted, setHasVoted] = useState(false)
+  const [chosenPaslonId, setChosenPaslonId] = useState(null as string | null)
+  const [activeTab, setActiveTab] = useState('vote' as TabType)
+  const [selectedCandidate, setSelectedCandidate] = useState(null as Candidate | null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [toasts, setToasts] = useState([] as ToastMessage[])
 
   // Admin State
-  const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false)
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false)
-  // Admin emails loaded from Firestore config/admins
-  const [adminEmails, setAdminEmails] = useState<string[]>([])
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false)
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false)
+  const [adminEmails, setAdminEmails] = useState([] as string[])
+  const adminEmailsRef = useRef([] as string[])
 
   // Toast Helper
   const addToast = useCallback(
@@ -96,16 +94,42 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  // Handle redirect result on mount (if user was redirected from Google)
+  // Ambil daftar admin terbaru dari Firestore tanpa memicu re-render loop
+  const loadAdminEmails = useCallback(async (): Promise<string[]> => {
+    try {
+      const adminsRef = doc(firestoreDb, 'config', 'admins')
+      const snap = await getDoc(adminsRef)
+      if (snap.exists()) {
+        const data = snap.data()
+        const emails: string[] = Array.isArray(data?.emails)
+          ? data.emails.map((e: string) => e.toLowerCase().trim())
+          : []
+        adminEmailsRef.current = emails
+        setAdminEmails(emails)
+        return emails
+      }
+    } catch (err) {
+      console.error('Could not load admin list:', err)
+    }
+    return adminEmailsRef.current
+  }, [])
+
+  // Load admin emails on mount
+  useEffect(() => {
+    loadAdminEmails()
+  }, [loadAdminEmails])
+
+  // Handle redirect result on mount
   useEffect(() => {
     getRedirectResult(authInstance)
-      .then((result) => {
+      .then(async (result) => {
         if (!result) return
         const loggedUser = result.user
         const email = (loggedUser.email || '').toLowerCase().trim()
+        const latestAdmins = await loadAdminEmails()
 
-        if (!isEmailAllowed(email, campusDomain)) {
-          signOut(authInstance)
+        if (!isEmailAllowed(email, campusDomain, latestAdmins)) {
+          await signOut(authInstance)
           setUser(null)
           addToast(
             'error',
@@ -140,15 +164,17 @@ export default function App() {
         }
         console.error('getRedirectResult error:', err)
       })
-  }, [campusDomain, addToast])
+  }, [campusDomain, loadAdminEmails, addToast])
 
   // Check auth state
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(authInstance, async (currentUser) => {
       if (currentUser && currentUser.email) {
         const email = currentUser.email.toLowerCase().trim()
-        if (!isEmailAllowed(email, campusDomain)) {
-          signOut(authInstance)
+        const latestAdmins = await loadAdminEmails()
+
+        if (!isEmailAllowed(email, campusDomain, latestAdmins)) {
+          await signOut(authInstance)
           setUser(null)
           addToast(
             'error',
@@ -160,7 +186,6 @@ export default function App() {
 
       setUser(currentUser)
       if (currentUser) {
-        // Query Firestore directly: Single Source of Truth for voting status (Anti-manipulasi)
         const voterRef = doc(firestoreDb, 'voters', currentUser.uid)
         getDoc(voterRef)
           .then((snap) => {
@@ -184,7 +209,7 @@ export default function App() {
       }
     })
     return () => unsubscribe()
-  }, [campusDomain, addToast])
+  }, [campusDomain, loadAdminEmails, addToast])
 
   // Listen to Candidates & Election Settings from Firestore in Real-Time
   useEffect(() => {
@@ -222,9 +247,9 @@ export default function App() {
     const unsubVotes = onSnapshot(
       qVotes,
       (snapshot) => {
-        const voteMap = new Map<string, number>()
-        snapshot.forEach((doc) => {
-          const data = doc.data()
+        const voteMap = new Map()
+        snapshot.forEach((docItem) => {
+          const data = docItem.data()
           if (data.paslonId && data.votes !== undefined) {
             voteMap.set(data.paslonId, (voteMap.get(data.paslonId) || 0) + Number(data.votes))
           }
@@ -281,9 +306,10 @@ export default function App() {
       const result = await signInWithPopup(authInstance, googleProvider)
       const loggedUser = result.user
       const email = (loggedUser.email || '').toLowerCase().trim()
+      const latestAdmins = await loadAdminEmails()
 
       // Pengecekan Domain Kampus (kecuali akun Admin terdaftar)
-      if (!isEmailAllowed(email, campusDomain)) {
+      if (!isEmailAllowed(email, campusDomain, latestAdmins)) {
         await signOut(authInstance)
         setUser(null)
         addToast(
@@ -307,7 +333,6 @@ export default function App() {
       console.error('Google login error:', err)
 
       if (err?.code === 'auth/popup-blocked') {
-        // Jika popup diblokir oleh browser iOS/Safari, alihkan ke redirect
         addToast('info', 'Popup diblokir, mengalihkan ke halaman Google...')
         await signInWithRedirect(authInstance, googleProvider)
         return
@@ -418,7 +443,6 @@ export default function App() {
 
     setIsSubmitting(true)
     try {
-      // 1. Database-Level Check: Verifikasi langsung ke Firestore (Anti-Bypass)
       const voterRef = doc(firestoreDb, 'voters', user.uid)
       const existingRecord = await getDoc(voterRef)
       if (existingRecord.exists()) {
@@ -428,7 +452,6 @@ export default function App() {
         return
       }
 
-      // 2. Kunci hak suara pemilih di koleksi 'voters' (1 Mahasiswa = 1 Suara Sah)
       await setDoc(voterRef, {
         name: user.displayName || 'Mahasiswa',
         email: user.email || '',
@@ -436,8 +459,6 @@ export default function App() {
         choice: selectedCandidate.id,
       })
 
-      // 3. Catat surat suara secara anonim di koleksi 'votes' (Asas LUBER: Rahasia)
-      // Identitas pemilih sengaja tidak ditautkan ke pilihan paslon untuk menjaga kerahasiaan suara
       await addDoc(voteCollection, {
         paslonId: selectedCandidate.id,
         paslonName: selectedCandidate.title,
@@ -468,24 +489,6 @@ export default function App() {
   const isAuthorizedAdminUser = Boolean(
     user?.email && adminEmails.includes(user.email.toLowerCase().trim())
   )
-
-  // Load admin emails from Firestore config/admins on mount
-  useEffect(() => {
-    const adminsRef = doc(firestoreDb, 'config', 'admins')
-    getDoc(adminsRef)
-      .then((snap) => {
-        if (snap.exists()) {
-          const data = snap.data()
-          const emails: string[] = Array.isArray(data?.emails)
-            ? data.emails.map((e: string) => e.toLowerCase().trim())
-            : []
-          setAdminEmails(emails)
-        }
-      })
-      .catch((err) => {
-        console.error('Could not load admin list:', err)
-      })
-  }, [])
 
   // ADMIN ACTIONS
   const handleAdminLogin = async (): Promise<boolean> => {
@@ -537,11 +540,9 @@ export default function App() {
 
   const handleResetVotes = async () => {
     try {
-      // 1. Hapus seluruh surat suara
       const snapshot = await getDocs(voteCollection)
       const deletePromises = snapshot.docs.map((docItem) => deleteDoc(docItem.ref))
 
-      // 2. Hapus seluruh riwayat pemilih terdaftar
       const votersSnapshot = await getDocs(votersCollection)
       const deleteVotersPromises = votersSnapshot.docs.map((docItem) => deleteDoc(docItem.ref))
 
@@ -563,7 +564,7 @@ export default function App() {
     }
   }
 
-  const totalVotesCount = Array.from(votes.values()).reduce((sum, v) => sum + v, 0)
+  const totalVotesCount = Array.from(votes.values()).reduce((sum, v) => sum + Number(v), 0)
 
   return (
     <div className="min-h-dvh relative flex flex-col font-sans selection:bg-blue-600 selection:text-white">
@@ -625,7 +626,6 @@ export default function App() {
 
         {/* Main Container */}
         <main className="max-w-4xl w-full mx-auto px-3.5 sm:px-6 py-6 sm:py-10 flex-1 space-y-6 sm:space-y-8">
-
           {/* Simple & Clean Header */}
           <div className="text-center space-y-2.5">
             <div className="inline-flex flex-wrap items-center justify-center gap-2">
@@ -653,8 +653,8 @@ export default function App() {
                   <button
                     onClick={() => setActiveTab('vote')}
                     className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'vote'
-                      ? 'bg-white text-slate-900 shadow-md'
-                      : 'text-slate-200 hover:text-white'
+                        ? 'bg-white text-slate-900 shadow-md'
+                        : 'text-slate-200 hover:text-white'
                       }`}
                   >
                     <Vote className="w-3.5 h-3.5" />
@@ -664,8 +664,8 @@ export default function App() {
                   <button
                     onClick={() => setActiveTab('results')}
                     className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'results'
-                      ? 'bg-white text-slate-900 shadow-md'
-                      : 'text-slate-200 hover:text-white'
+                        ? 'bg-white text-slate-900 shadow-md'
+                        : 'text-slate-200 hover:text-white'
                       }`}
                   >
                     <BarChart3 className="w-3.5 h-3.5" />
@@ -736,7 +736,6 @@ export default function App() {
               ))}
             </div>
           )}
-
         </main>
 
         {/* Official Footer */}
