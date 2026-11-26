@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   Loader2,
-  Lock,
   User,
   Upload,
   GraduationCap,
@@ -17,7 +16,7 @@ import {
 } from 'lucide-react'
 import type { Candidate } from '../data/paslonData'
 import type { VoterRecord } from '../types'
-import { TSU_LOGO_URL, ADMIN_EMAILS } from '../constants'
+import { TSU_LOGO_URL } from '../constants'
 import { compressImageFile } from '../utils/imageCompress'
 import { exportVotersToCsv } from '../utils/exportCsv'
 
@@ -30,13 +29,12 @@ interface AdminPanelProps {
   onToggleVotingOpen: (isOpen: boolean) => Promise<void>
   onResetVotes: () => Promise<void>
   isAdminLoggedIn: boolean
-  onLoginAdmin: (password: string) => boolean | Promise<boolean>
+  onLoginAdmin: () => boolean | Promise<boolean>
   onLogoutAdmin: () => void
   campusDomain: string
   onSaveCampusDomain: (domain: string) => Promise<void>
   campusBg: string
   onSaveCampusBg: (bgUrl: string) => Promise<void>
-  onSaveAdminPin?: (newPin: string) => Promise<void>
   votersList: VoterRecord[]
   isAuthorizedAdminUser: boolean
   onGoogleLogin: () => void
@@ -57,13 +55,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onSaveCampusDomain,
   campusBg,
   onSaveCampusBg,
-  onSaveAdminPin,
   votersList,
   isAuthorizedAdminUser,
   onGoogleLogin,
 }) => {
-  const [adminPassword, setAdminPassword] = useState('')
-  const [loginError, setLoginError] = useState(false)
   const [activeTab, setActiveTab] = useState<'candidates' | 'voters' | 'settings' | 'reset'>('candidates')
   const [selectedCandidateIndex, setSelectedCandidateIndex] = useState<number>(0)
   const [formData, setFormData] = useState<Candidate[]>(() => JSON.parse(JSON.stringify(candidates)))
@@ -78,25 +73,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [domainSaveSuccess, setDomainSaveSuccess] = useState<boolean>(false)
   const [isUploadingBg, setIsUploadingBg] = useState<boolean>(false)
   const [bgSaveSuccess, setBgSaveSuccess] = useState<boolean>(false)
-  const [newPinInput, setNewPinInput] = useState<string>('')
-  const [isSavingPin, setIsSavingPin] = useState<boolean>(false)
-  const [pinSaveSuccess, setPinSaveSuccess] = useState<boolean>(false)
 
   if (!isOpen) return null
 
-  // If not logged in as admin yet, show password prompt
+  // If not logged in as admin yet, show Google login prompt
   if (!isAdminLoggedIn) {
-    const handleLoginSubmit = async (e: React.FormEvent) => {
-      e.preventDefault()
-      const success = await onLoginAdmin(adminPassword)
-      if (success) {
-        setLoginError(false)
-        setAdminPassword('')
-      } else {
-        setLoginError(true)
-      }
-    }
-
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
         <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 space-y-4">
@@ -117,66 +98,40 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-2">
+            <p className="leading-relaxed">
+              {isAuthorizedAdminUser
+                ? 'Akun admin terverifikasi. Klik tombol di bawah untuk masuk ke panel admin.'
+                : 'Untuk keamanan database, silakan login Google menggunakan akun admin terlebih dahulu.'}
+            </p>
             {!isAuthorizedAdminUser && (
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-2">
-                <p className="leading-relaxed">
-                  Untuk keamanan database, silakan login Google menggunakan akun admin{' '}
-                  <strong className="font-mono break-all">{ADMIN_EMAILS[0]}</strong> terlebih dahulu.
-                </p>
-                <button
-                  type="button"
-                  onClick={onGoogleLogin}
-                  className="w-full py-1.5 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-colors cursor-pointer"
-                >
-                  Masuk Google Admin
-                </button>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                PIN / Password Admin:
-              </label>
-              <div className="relative">
-                <input
-                  type="password"
-                  value={adminPassword}
-                  onChange={(e) => {
-                    setAdminPassword(e.target.value)
-                    setLoginError(false)
-                  }}
-                  placeholder="Masukkan password admin..."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
-                  autoFocus
-                />
-                <Lock className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1.5">
-              </p>
-              {loginError && (
-                <p className="text-xs text-rose-600 font-medium mt-1">
-                  Password salah. Silakan coba lagi.
-                </p>
-              )}
-            </div>
-
-            <div className="flex gap-2">
               <button
                 type="button"
-                onClick={onClose}
-                className="flex-1 py-2 px-3 text-xs font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
+                onClick={onGoogleLogin}
+                className="w-full py-1.5 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-colors cursor-pointer"
               >
-                Batal
+                Masuk Google Admin
               </button>
-              <button
-                type="submit"
-                className="flex-1 py-2 px-3 text-xs font-bold rounded-xl bg-slate-900 hover:bg-slate-800 text-white shadow-xs cursor-pointer"
-              >
-                Masuk
-              </button>
-            </div>
-          </form>
+            )}
+          </div>
+
+          {isAuthorizedAdminUser && (
+            <button
+              type="button"
+              onClick={() => onLoginAdmin()}
+              className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-slate-900 hover:bg-slate-800 text-white shadow-xs cursor-pointer"
+            >
+              Masuk Panel Admin
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2 px-3 text-xs font-semibold rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
+          >
+            Batal
+          </button>
         </div>
       </div>
     )
@@ -751,64 +706,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   )}
                 </div>
               </div>
-
-              {/* Security: Change Admin PIN */}
-              {onSaveAdminPin && (
-                <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
-                      <Lock className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-900">Keamanan: Ubah PIN Admin</h4>
-                      <p className="text-[11px] text-slate-500">
-                        PIN disimpan secara aman menggunakan enkripsi hash SHA-256 (tidak terekspos di kode sumber).
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 pt-1">
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        type="password"
-                        value={newPinInput}
-                        onChange={(e) => {
-                          setNewPinInput(e.target.value)
-                          setPinSaveSuccess(false)
-                        }}
-                        placeholder="Masukkan PIN baru (min. 6 karakter)"
-                        className="flex-1 min-w-0 px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                      <button
-                        onClick={async () => {
-                          if (newPinInput.length < 6) return
-                          setIsSavingPin(true)
-                          try {
-                            await onSaveAdminPin(newPinInput.trim())
-                            setPinSaveSuccess(true)
-                            setNewPinInput('')
-                            setTimeout(() => setPinSaveSuccess(false), 3000)
-                          } finally {
-                            setIsSavingPin(false)
-                          }
-                        }}
-                        disabled={isSavingPin || newPinInput.trim().length < 6}
-                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        {isSavingPin ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                        <span>Simpan PIN</span>
-                      </button>
-                    </div>
-
-                    {pinSaveSuccess && (
-                      <p className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        PIN Admin baru berhasil dienkripsi dan disimpan!
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {/* Voting Open/Close Toggle */}
               <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50 space-y-4">

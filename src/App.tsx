@@ -24,17 +24,8 @@ import {
   type User,
 } from './firebase'
 
-// Cryptographic SHA-256 helper (Native Web Crypto API)
-const sha256 = async (message: string): Promise<string> => {
-  const msgBuffer = new TextEncoder().encode(message)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-// Default Admin PIN Hash (SHA-256 of initial setup — no plaintext password in source code)
-const DEFAULT_ADMIN_PIN_HASH =
-  'e9d74be15c7472eb6ea8de19df936f1eda1b49fde9cd76128661b6a3a28bff4e'
+// NOTE: Admin emails are loaded dynamically from Firestore collection `config/admins`.
+// The list is stored in state `adminEmails` and used to determine admin status.
 
 // Detect In-App Browser (WhatsApp, Instagram, FB, Line, TikTok)
 const isInAppBrowser = (): boolean => {
@@ -51,12 +42,12 @@ const isInAppBrowser = (): boolean => {
 }
 import { PASLON_LIST, type Candidate } from './data/paslonData'
 import type { TabType, ToastMessage, VoterRecord } from './types'
-import { TSU_LOGO_URL, ADMIN_EMAILS } from './constants'
+import { TSU_LOGO_URL } from './constants'
 
 const isEmailAllowed = (email: string, campusDomain: string): boolean => {
   const clean = email.toLowerCase().trim()
   const domainCheck = campusDomain.toLowerCase().trim()
-  return ADMIN_EMAILS.includes(clean) || !domainCheck || clean.endsWith(domainCheck)
+  return !domainCheck || clean.endsWith(domainCheck)
 }
 import { Navbar } from './components/Navbar'
 import { CandidateCard } from './components/CandidateCard'
@@ -89,7 +80,8 @@ export default function App() {
   // Admin State
   const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false)
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false)
-  const [adminPinHash, setAdminPinHash] = useState<string>(DEFAULT_ADMIN_PIN_HASH)
+  // Admin emails loaded from Firestore config/admins
+  const [adminEmails, setAdminEmails] = useState<string[]>([])
 
   // Toast Helper
   const addToast = useCallback(
@@ -212,9 +204,6 @@ export default function App() {
           }
           if (data.campusBg) {
             setCampusBg(data.campusBg)
-          }
-          if (data.adminPinHash) {
-            setAdminPinHash(data.adminPinHash)
           }
         }
       },
@@ -477,37 +466,39 @@ export default function App() {
   }
 
   const isAuthorizedAdminUser = Boolean(
-    user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim())
+    user?.email && adminEmails.includes(user.email.toLowerCase().trim())
   )
 
+  // Load admin emails from Firestore config/admins on mount
+  useEffect(() => {
+    const adminsRef = doc(firestoreDb, 'config', 'admins')
+    getDoc(adminsRef)
+      .then((snap) => {
+        if (snap.exists()) {
+          const data = snap.data()
+          const emails: string[] = Array.isArray(data?.emails)
+            ? data.emails.map((e: string) => e.toLowerCase().trim())
+            : []
+          setAdminEmails(emails)
+        }
+      })
+      .catch((err) => {
+        console.error('Could not load admin list:', err)
+      })
+  }, [])
+
   // ADMIN ACTIONS
-  const handleAdminLogin = async (password: string): Promise<boolean> => {
+  const handleAdminLogin = async (): Promise<boolean> => {
     if (!isAuthorizedAdminUser) {
       addToast(
         'error',
-        `Akses Admin ditolak. Harap login Google dengan akun admin (${ADMIN_EMAILS[0]}) terlebih dahulu.`
+        'Akses Admin ditolak. Harap login Google menggunakan akun admin terlebih dahulu.'
       )
       return false
     }
-
-    try {
-      const inputHash = await sha256(password)
-      if (inputHash === adminPinHash) {
-        setIsAdminLoggedIn(true)
-        addToast('success', 'Berhasil masuk sebagai Admin!')
-        return true
-      }
-    } catch (e) {
-      console.error('Admin hash validation error:', e)
-    }
-    return false
-  }
-
-  const handleSaveAdminPin = async (newPin: string) => {
-    const hashed = await sha256(newPin)
-    await setDoc(settingsDocRef, { adminPinHash: hashed }, { merge: true })
-    setAdminPinHash(hashed)
-    addToast('success', 'PIN Admin berhasil dienkripsi dan disimpan ke database!')
+    setIsAdminLoggedIn(true)
+    addToast('success', 'Berhasil masuk sebagai Admin!')
+    return true
   }
 
   const handleAdminLogout = () => {
@@ -616,7 +607,6 @@ export default function App() {
             onSaveCampusDomain={handleSaveCampusDomain}
             campusBg={campusBg}
             onSaveCampusBg={handleSaveCampusBg}
-            onSaveAdminPin={handleSaveAdminPin}
             votersList={votersList}
             isAuthorizedAdminUser={isAuthorizedAdminUser}
             onGoogleLogin={handleGoogleLogin}
